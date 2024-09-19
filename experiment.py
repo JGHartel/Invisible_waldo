@@ -12,7 +12,7 @@ import time
 
 tag_detector = Detector()
 
-ADDRESS = "192.168.247.52"
+ADDRESS = "192.168.137.234"
 PORT = "8080"
 
 def load_image_game(stimuli_path):
@@ -187,6 +187,7 @@ def draw_remaining_targets_count(image):
         units='pix'
     )
     count_text.draw()
+
 
 
 # Main loop to display the AprilTags
