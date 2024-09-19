@@ -1,8 +1,8 @@
 from pupil_apriltags import Detector  # AprilTag detector from pupil_apriltags
-from pupil_labs.realtime_api.simple import Device, discover_one_device
+from pupil_labs.realtime_api.simple import Device
 import numpy as np
 import cv2
-from psychopy import visual, core, event
+from psychopy import visual, core, event, gui
 from marker import AprilMarker
 import pandas as pd
 from image import ImageGame
@@ -12,28 +12,21 @@ import time
 
 tag_detector = Detector()
 
-ADDRESS = "192.168.144.167"
+ADDRESS = "192.168.247.52"
 PORT = "8080"
 
 def load_image_game(stimuli_path):
     image = [None] * 12
-    for i in range(12):
-        image_path = f'{stimuli_path}/image_{i}.png'
+    for i in range(1,13):
+        image_path = f'{stimuli_path}/image_{i}.jpg'
         targets_csv = f'{stimuli_path}/targets_{i}.csv'
-        image[i] = ImageGame(image_path, targets_csv)
+        image[i-1] = ImageGame(image_path, targets_csv)
     return image
 
 def setup_device(address=ADDRESS, port=PORT):
     device = Device(address=address, port=port)
-    core.wait(1)
     # check connection
     return device  
-
-def load_video(video_path):
-    cap = cv2.VideoCapture(video_path)
-    frame_rate = cap.get(cv2.CAP_PROP_FPS)
-    time_per_frame = 1.0 / frame_rate
-    return cap, time_per_frame
 
 def calculate_transformation_matrix(detections, marker_info):
     world_points = []
@@ -98,19 +91,14 @@ def transform_gaze(gaze, transformation_matrix, win_size):
     return np.array([psychopy_x, psychopy_y])
 
 
-def draw_gaze_marker(win, gaze_point, color='red', size=40):
-    marker = visual.Circle(win, radius=size, edges=32, lineColor=color, fillColor=color, pos=gaze_point)
-    marker.draw()
-
-
 # Initialize the PsychoPy window
-win = visual.Window(units='pix', color='white', screen=2, fullscr=True)
+win = visual.Window(units='pix', color='white', screen=1, fullscr=True, allowStencil=True)
 
 # Define screen size and tag size
 width, height = win.size
-tag_size = 200
+tag_size = 300
 
-offset = 50 
+offset = 20 
 # Create four AprilMarker instances (one for each corner)s
 tag_positions = [
     ((-width +  tag_size) // 2 + offset, (height - tag_size) // 2 - offset),
@@ -127,47 +115,50 @@ for i, position in enumerate(tag_positions):
 
 marker_info = pd.DataFrame(columns=['marker_id', 'marker_pos', 'marker_corners'])
 for marker in april_markers:
-    marker.draw()
     marker_id, marker_pos, marker_corners = marker.get_information()
     marker_info.at[marker_id, 'marker_id'] = marker_id
     marker_info.at[marker_id, 'marker_pos'] = marker_pos
     marker_info.at[marker_id, 'marker_corners'] = marker_corners
     marker_info.dropna()
 
-# Initialize a mask covering the entire image
-mask = visual.GratingStim(
-    win,
-    tex=None,
-    mask='circle',
-    size=(width * 2, height * 2),
-    color='gray',
-    opacity=1.0,
-    units='pix'
-)
+def draw_markers():
+    for marker in april_markers:
+        marker.draw()
 
-def update_mask_position(gaze_point):
-    mask.pos = gaze_point
+# Function to generate a circular aperture for the gaze
+def create_gaze_aperture(win, radius=200):
+    # Create a circular mask with a transparent aperture
+    aperture = visual.Aperture(win, size=2*radius, shape='circle')
+    aperture.enabled = True  # Initially enable the aperture
+    return aperture
 
-    import time
+aperture = create_gaze_aperture(win)    
+
+# Function to update the aperture position to match the gaze
+def update_aperture_position(gaze_point):
+    aperture.pos = gaze_point
+
 
 # Initialize a dictionary to keep track of gaze times on targets
 gaze_on_target_start = {}
-def check_targets(gaze_point, image, radius=100):
+
+def check_targets(gaze_point, image, radius=200):
     current_time = time.time()
-    for index, target in image.get_targets().iterrows():
+    for index, target in image.targets.iterrows():
         target_id = target['id']
-        target_pos = np.array([target['x'], target['y']])
+        target_pos = np.array([target['psychopy_x'], target['psychopy_y']])
         distance = np.linalg.norm(gaze_point - target_pos)
         if distance < radius:  # Define a radius for vicinity
             if target_id not in gaze_on_target_start:
                 gaze_on_target_start[target_id] = current_time
             else:
                 elapsed_time = current_time - gaze_on_target_start[target_id]
-                if elapsed_time >= 2.0 and not image.is_target_found(target_id):
+                if elapsed_time >= 1.0 and not image.is_target_found(target_id):
                     image.mark_target_found(target_id)
         else:
             gaze_on_target_start.pop(target_id, None)
 
+crosses = []
 def draw_found_targets(image):
     for target_id in image.found_targets:
         target = image.targets[image.targets['id'] == target_id].iloc[0]
@@ -177,22 +168,26 @@ def draw_found_targets(image):
             lineWidth=5,
             closeShape=False,
             lineColor='red',
-            pos=(target['x'], target['y'])
+            pos=(target['psychopy_x'], target['psychopy_y'])
         )
-        cross.draw()
+        crosses.append(cross)
+        cross.autoDraw = True 
+
+def reset_crosses(image):
+    for target_id in image.found_targets:
+        crosses[i].autoDraw = False
 
 def draw_remaining_targets_count(image):
     count_text = visual.TextStim(
         win,
         text=f"Remaining Targets: {image.remaining_targets()}",
-        pos=(width / 2 - 100, height / 2 - 50),  # Adjust position as needed
-        color='black',
+        pos=(0, height / 2 - 50),  # Adjust position as needed
+        height=50,
+        color='red',
         units='pix'
     )
     count_text.draw()
 
-
-device = setup_device()
 
 # Main loop to display the AprilTags
 i=0
@@ -202,39 +197,191 @@ images = load_image_game('stimuli')
 
 current_image = random.choice(images)
 
+game_image = visual.ImageStim(win, image=current_image.get_image(), units='pix', pos=(0, 0), size=(1200, 1200))
+
+aperture.enabled = False
+
+gaze_point = np.zeros(2)
+prev_gaze_point = np.zeros((3, 2))
+
+participant_info = {'Name': ''}
+dlg = gui.DlgFromDict(participant_info, title='Participant Information')
+if not dlg.OK:
+    core.quit()
+participant_name = participant_info['Name']
+
+device = setup_device()
+
+# Draw the markers
+draw_markers()
+
+# Introduction text
+intro_text = visual.TextStim(
+    win,
+    text='Welcome to the experiment!\n\nYour task is to find all clovers on screen.\n\nPress any key to start.',
+    pos=(0, 0),
+    height=30,
+    color='black',
+    units='pix'
+)
+
+# Display the introduction text
+intro_text.draw()
+win.flip()
+event.waitKeys()
+
 # Main loop to display the game
-while not event.getKeys(['escape']):
-    win.flip()
-    frame, gaze_data = device.receive_matched_scene_video_frame_and_gaze()
-    frame = frame.bgr_pixels
-    frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    detections = tag_detector.detect(frame_gray)
+results = []
+for trial in range(1, 4):
+    current_image = random.choice(images)
+    game_image = visual.ImageStim(win, image=current_image.get_image(), units='pix', pos=(0, 0), size=(1200, 1200))
 
-    transformation_matrix, distance = calculate_transformation_matrix(detections, marker_info)
+    current_image.reset()
+    trial_start_time = time.time()   
+    while not event.getKeys(['escape']):
+        
+        frame, gaze_data = device.receive_matched_scene_video_frame_and_gaze()
+        frame = frame.bgr_pixels
+        frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        detections = tag_detector.detect(frame_gray)
 
-    if transformation_matrix is not None:
-        gaze_point = transform_gaze(gaze_data['norm_pos'], transformation_matrix, frame.shape, win.size)
-        update_mask_position(gaze_point)
-        check_targets(gaze_point, current_image)
-    else:
-        # If no valid transformation, keep the mask centered
-        update_mask_position((0, 0))
+        transformation_matrix, distance = calculate_transformation_matrix(detections, marker_info)
 
-    # Draw the game image
-    current_image.draw()
+        if transformation_matrix is not None:
 
-    # Draw the mask over the image
-    mask.draw()
+            gaze_point = transform_gaze(gaze_data, transformation_matrix, win.size)
 
-    # Draw found targets
-    draw_found_targets(current_image)
+            for i in range(1,3):
+                prev_gaze_point[i-1] = prev_gaze_point[i]
 
-    # Draw remaining targets count
-    draw_remaining_targets_count(current_image)
+            #prev_gaze_point[-1] = gaze_point
 
-    # Flip the window to update the display
-    win.flip()
+            gaze_point = prev_gaze_point.mean(axis=0)
+            
+            update_aperture_position(gaze_point)
+            check_targets(gaze_point, current_image)
+        else:
+            # If no valid transformation, keep the mask centered
+            update_aperture_position((0, 0))
 
+        aperture.enabled = True
+        # Draw the game image
+        game_image.draw()
+        # Draw the mask over the image
+        aperture.enabled = False
+        draw_markers()
+        # Draw found targets
+        draw_found_targets(current_image)
+        # Draw remaining targets count
+        draw_remaining_targets_count(current_image)
+        win.flip()
+
+        # Break the loop if all targets are found
+        if current_image.remaining_targets() == 0:
+            break
+
+    reset_crosses(current_image)
+
+    # Record the end time of the trial
+    trial_end_time = time.time()
+    trial_duration = trial_end_time - trial_start_time
+
+    # Record the number of targets found
+    targets_found = len(current_image.found_targets)
+    total_targets = len(current_image.targets)
+
+    # Save the trial results
+    trial_result = {
+        'Name': participant_name,
+        'Trial': trial,
+        'Duration': trial_duration,
+        'TargetsFound': targets_found,
+        'TotalTargets': total_targets
+    }
+    results.append(trial_result)
+
+    # Optional: Display a short break or instruction between trials
+    if trial < 3:
+        break_text = visual.TextStim(
+            win,
+            text='Get ready for the next round!\n\nPress any key to continue.',
+            pos=(0, 0),
+            height=30,
+            color='black',
+            units='pix'
+        )
+        break_text.draw()
+        win.flip()
+        event.waitKeys()
+
+results_df = pd.DataFrame(results)
+
+# sum the time one participant took to find all targets
+total_time = results_df['Duration'].sum()
+total_targets_found = results_df['TargetsFound'].sum()
+time_per_target = total_time / total_targets_found 
+
+final_results = {
+    'Name': participant_name,
+    'TotalTime': total_time,
+    'TotalTargetsFound': total_targets_found,
+    'TimePerTarget': time_per_target
+}
+
+
+import csv
+import os
+
+results_file = 'leaderboard.csv'
+
+# Check if the file exists
+file_exists = os.path.isfile(results_file)
+
+with open(results_file, 'a', newline='') as csvfile:
+    fieldnames = ['Name', 'TotalTime', 'TotalTargetsFound', 'TimePerTarget']
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+    # If the file doesn't exist, write the header
+    if not file_exists:
+        writer.writeheader()
+
+    writer.writerow(final_results)
+
+# Display the final results
+final_text = visual.TextStim(
+    win,
+    text=f'Congratulations, {participant_name}!\n\nYou found {total_targets_found} targets in {total_time:.2f} seconds.\n\nAverage time per target: {time_per_target:.2f} seconds.',
+    pos=(0, 0),
+    height=30,
+    color='black',
+    units='pix'
+)
+
+final_text.draw()
+win.flip()
+event.waitKeys()
+
+# display leaderboard
+leaderboard = pd.read_csv('leaderboard.csv')
+leaderboard = leaderboard.sort_values(by='TotalTime')
+leaderboard_text = 'Leaderboard\n\n'
+for index, row in leaderboard.iterrows():
+    leaderboard_text += f"{row['Name']}: {row['TimePerTarget']} seconds per target\n"
+
+leaderboard_text += '\nPress any key to exit.'
+
+leaderboard_text_stim = visual.TextStim(
+    win,
+    text=leaderboard_text,
+    pos=(0, 0),
+    height=30,
+    color='black',
+    units='pix'
+)
+
+leaderboard_text_stim.draw()
+win.flip()
+event.waitKeys()
 
 device.close()
 
