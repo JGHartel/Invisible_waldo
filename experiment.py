@@ -28,6 +28,10 @@ def setup_device(address=ADDRESS, port=PORT):
     # check connection
     return device  
 
+def wait_for_keypress():
+    while not event.getKeys():
+        core.wait(0.1)  # Wait for 100ms before checking again
+
 def calculate_transformation_matrix(detections, marker_info):
     world_points = []
     screen_points = []
@@ -57,7 +61,6 @@ def calculate_transformation_matrix(detections, marker_info):
     screen_points = np.array(screen_points).reshape(-1, 2)
 
     if len(world_points) < 4:
-        print('Not enough points to calculate the transformation matrix.')
         return None, None
 
     # Compute the transformation matrix using the world and screen points
@@ -212,6 +215,8 @@ if not dlg.OK:
 participant_name = participant_info['Name']
 
 device = setup_device()
+#wait for device connection
+
 
 # Draw the markers
 draw_markers()
@@ -229,7 +234,7 @@ intro_text = visual.TextStim(
 # Display the introduction text
 intro_text.draw()
 win.flip()
-event.waitKeys()
+wait_for_keypress()
 
 # Main loop to display the game
 results = []
@@ -241,7 +246,10 @@ for trial in range(1, 4):
     trial_start_time = time.time()   
     while not event.getKeys(['escape']):
         
+
         frame, gaze_data = device.receive_matched_scene_video_frame_and_gaze()
+
+
         frame = frame.bgr_pixels
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         detections = tag_detector.detect(frame_gray)
@@ -313,7 +321,7 @@ for trial in range(1, 4):
         )
         break_text.draw()
         win.flip()
-        event.waitKeys()
+        wait_for_keypress()
 
 results_df = pd.DataFrame(results)
 
@@ -360,7 +368,7 @@ final_text = visual.TextStim(
 
 final_text.draw()
 win.flip()
-event.waitKeys()
+wait_for_keypress()
 
 # display leaderboard
 leaderboard = pd.read_csv('leaderboard.csv')
@@ -382,7 +390,7 @@ leaderboard_text_stim = visual.TextStim(
 
 leaderboard_text_stim.draw()
 win.flip()
-event.waitKeys()
+wait_for_keypress()
 
 device.close()
 
