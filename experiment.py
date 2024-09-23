@@ -6,7 +6,7 @@ from psychopy import visual, core, event, gui
 from marker import AprilMarker
 import pandas as pd
 from image import ImageGame
-import random
+import random 
 import time
 
 
@@ -158,29 +158,48 @@ def check_targets(gaze_point, image, radius=200):
                 elapsed_time = current_time - gaze_on_target_start[target_id]
                 if elapsed_time >= 1.0 and not image.is_target_found(target_id):
                     image.mark_target_found(target_id)
+
         else:
             gaze_on_target_start.pop(target_id, None)
 
-crosses = []
-def draw_found_targets(image):
-    for target_id in image.found_targets:
-        target = image.targets[image.targets['id'] == target_id].iloc[0]
-        cross = visual.ShapeStim(
-            win,
-            vertices=((0, -20), (0, 20), (0,0), (-20, 0), (20, 0)),
-            lineWidth=5,
-            closeShape=False,
-            lineColor='red',
-            pos=(target['psychopy_x'], target['psychopy_y'])
-        )
-        crosses.append(cross)
-        cross.autoDraw = True 
+crosses = {}
 
-def reset_crosses(image):
+def draw_found_targets(win, image):
+    # Iterate over found targets
     for target_id in image.found_targets:
-        crosses[i].autoDraw = False
+        if target_id not in crosses:
+            # Retrieve target position from the image data
+            target = image.targets[image.targets['id'] == target_id].iloc[0]
+            
+            # Create a cross marker at the target's position
+            cross = visual.ShapeStim(
+                win,
+                vertices=((0, -20), (0, 20), (0, 0), (-20, 0), (20, 0)),
+                lineWidth=5,
+                closeShape=False,
+                lineColor='red',
+                pos=(target['psychopy_x'], target['psychopy_y'])
+            )
+            
+            # Add the cross to the dictionary of drawn crosses, keyed by target ID
+            crosses[target_id] = cross
+
+    # Ensure all previously drawn crosses remain on screen
+    for cross in crosses.values():
+        cross.draw()
+
+    return crosses
+
+def reset_crosses(crosses):
+    crosses = {}
+    return crosses
 
 def draw_remaining_targets_count(image):
+    #check if count_text is defined
+    if 'count_text' in locals():
+        # delete the object
+        del count_text
+
     count_text = visual.TextStim(
         win,
         text=f"Remaining Targets: {image.remaining_targets()}",
@@ -215,8 +234,7 @@ if not dlg.OK:
 participant_name = participant_info['Name']
 
 device = setup_device()
-#wait for device connection
-
+core.wait(1)  # Wait for 1 second to establish connection
 
 # Draw the markers
 draw_markers()
@@ -243,35 +261,28 @@ for trial in range(1, 4):
     game_image = visual.ImageStim(win, image=current_image.get_image(), units='pix', pos=(0, 0), size=(1200, 1200))
 
     current_image.reset()
-    trial_start_time = time.time()   
+    trial_start_time = time.time()
+    
     while not event.getKeys(['escape']):
-        
-
         frame, gaze_data = device.receive_matched_scene_video_frame_and_gaze()
-
 
         frame = frame.bgr_pixels
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         detections = tag_detector.detect(frame_gray)
 
+        
         transformation_matrix, distance = calculate_transformation_matrix(detections, marker_info)
 
         if transformation_matrix is not None:
-
             gaze_point = transform_gaze(gaze_data, transformation_matrix, win.size)
-
-            for i in range(1,3):
-                prev_gaze_point[i-1] = prev_gaze_point[i]
-
-            #prev_gaze_point[-1] = gaze_point
-
-            gaze_point = prev_gaze_point.mean(axis=0)
             
             update_aperture_position(gaze_point)
             check_targets(gaze_point, current_image)
-        else:
+        elif transformation_matrix is None and gaze_data is not None:
+            gaze_point = transform_gaze(gaze_data, transformation_matrix_backup, win.size)
             # If no valid transformation, keep the mask centered
-            update_aperture_position((0, 0))
+            
+        transformation_matrix_backup = transformation_matrix
 
         aperture.enabled = True
         # Draw the game image
@@ -280,7 +291,8 @@ for trial in range(1, 4):
         aperture.enabled = False
         draw_markers()
         # Draw found targets
-        draw_found_targets(current_image)
+        crosses = draw_found_targets(win, current_image) 
+
         # Draw remaining targets count
         draw_remaining_targets_count(current_image)
         win.flip()
@@ -289,7 +301,7 @@ for trial in range(1, 4):
         if current_image.remaining_targets() == 0:
             break
 
-    reset_crosses(current_image)
+    crosses = reset_crosses(crosses)
 
     # Record the end time of the trial
     trial_end_time = time.time()
@@ -372,10 +384,13 @@ wait_for_keypress()
 
 # display leaderboard
 leaderboard = pd.read_csv('leaderboard.csv')
-leaderboard = leaderboard.sort_values(by='TotalTime')
+leaderboard = leaderboard.sort_values(by='TimePerTarget', ascending=True)
+# reset index
+leaderboard.reset_index(drop=True, inplace=True)
 leaderboard_text = 'Leaderboard\n\n'
 for index, row in leaderboard.iterrows():
-    leaderboard_text += f"{row['Name']}: {row['TimePerTarget']} seconds per target\n"
+    if index < 5:
+        leaderboard_text += f"{index + 1}. {row['Name']}: {row['TimePerTarget']} seconds\n"
 
 leaderboard_text += '\nPress any key to exit.'
 
@@ -383,7 +398,7 @@ leaderboard_text_stim = visual.TextStim(
     win,
     text=leaderboard_text,
     pos=(0, 0),
-    height=30,
+    height=50,
     color='black',
     units='pix'
 )
