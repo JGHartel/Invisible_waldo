@@ -9,12 +9,11 @@ from image import ImageGame
 import random 
 import time
 
-
 tag_detector = Detector()
 
 ADDRESS = "192.168.137.138"
 PORT = "8080"
-LANGUAGE = "en"
+LANGUAGE = "de"
 
 def load_image_game(stimuli_path):
     image = [None] * 12
@@ -96,7 +95,7 @@ def transform_gaze(gaze, transformation_matrix, win_size):
 
 
 # Initialize the PsychoPy window
-win = visual.Window(units='pix', color='white', screen=1, fullscr=True, allowStencil=True)
+win = visual.Window(units='pix', color='white', fullscr=True, allowStencil=True, screen=1) 
 
 # Define screen size and tag size
 width, height = win.size
@@ -201,14 +200,25 @@ def draw_remaining_targets_count(image):
         # delete the object
         del count_text
 
-    count_text = visual.TextStim(
-        win,
-        text=f"Remaining Targets: {image.remaining_targets()}",
-        pos=(0, height / 2 - 50),  # Adjust position as needed
-        height=50,
-        color='red',
-        units='pix'
-    )
+    if LANGUAGE == "en":
+        count_text = visual.TextStim(
+            win,
+            text=f"Remaining Targets: {image.remaining_targets()}",
+            pos=(0, height / 2 - 50),  # Adjust position as needed
+            height=50,
+            color='red',
+            units='pix'
+        )
+    elif LANGUAGE == "de":
+        count_text = visual.TextStim(
+            win,
+            text=f"Verbleibende Ziele: {image.remaining_targets()}",
+            pos=(0, height / 2 - 50),  # Adjust position as needed
+            height=50,
+            color='red',
+            units='pix'
+        )
+
     count_text.draw()
 
 
@@ -228,11 +238,13 @@ aperture.enabled = False
 gaze_point = np.zeros(2)
 prev_gaze_point = np.zeros((3, 2))
 
+
 participant_info = {'Name': ''}
 dlg = gui.DlgFromDict(participant_info, title='Participant Information')
 if not dlg.OK:
     core.quit()
 participant_name = participant_info['Name']
+
 
 device = setup_device()
 core.wait(1)  # Wait for 1 second to establish connection
@@ -425,15 +437,15 @@ leaderboard.reset_index(drop=True, inplace=True)
 if LANGUAGE == "en":
     leaderboard_text = 'Leaderboard\n\n'
     for index, row in leaderboard.iterrows():
-        if index < 5:
+        if index < 3:
             leaderboard_text += f"{index + 1}. {row['Name']}: {row['TimePerTarget']} seconds\n"
 
     leaderboard_text += '\nPress any key to exit.'
 elif LANGUAGE == "de":
     leaderboard_text = 'Bestenliste\n\n'
     for index, row in leaderboard.iterrows():
-        if index < 5:
-            leaderboard_text += f"{index + 1}. {row['Name']}: {row['TimePerTarget']} Sekunden\n"
+        if index < 3:
+            leaderboard_text += f"{index + 1}. {row['Name']}: {row[ 'TimePerTarget']} Sekunden\n"
 
     leaderboard_text += '\nDrücken Sie eine beliebige Taste, um zu beenden.'
 
