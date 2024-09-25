@@ -12,8 +12,9 @@ import time
 
 tag_detector = Detector()
 
-ADDRESS = "192.168.137.234"
+ADDRESS = "192.168.137.138"
 PORT = "8080"
+LANGUAGE = "en"
 
 def load_image_game(stimuli_path):
     image = [None] * 12
@@ -239,15 +240,25 @@ core.wait(1)  # Wait for 1 second to establish connection
 # Draw the markers
 draw_markers()
 
+if LANGUAGE == "en":
+    intro_text = visual.TextStim(
+        win,
+        text='Welcome to the experiment!\n\nYour task is to find all clovers on screen.\n\nPress any key to start.',
+        pos=(0, 0),
+        height=30,
+        color='black',
+        units='pix'
+    )
+elif LANGUAGE == "de":
 # Introduction text
-intro_text = visual.TextStim(
-    win,
-    text='Welcome to the experiment!\n\nYour task is to find all clovers on screen.\n\nPress any key to start.',
-    pos=(0, 0),
-    height=30,
-    color='black',
-    units='pix'
-)
+    intro_text = visual.TextStim(
+        win,
+        text='Willkommen zum Experiment!\n\nIhre Aufgabe ist es, alle Kleeblätter auf dem Bildschirm zu finden.\n\nDrücken Sie eine beliebige Taste, um zu beginnen.',
+        pos=(0, 0),
+        height=30,
+        color='black',
+        units='pix'
+    )
 
 # Display the introduction text
 intro_text.draw()
@@ -278,11 +289,11 @@ for trial in range(1, 4):
             
             update_aperture_position(gaze_point)
             check_targets(gaze_point, current_image)
-        elif transformation_matrix is None and gaze_data is not None:
-            gaze_point = transform_gaze(gaze_data, transformation_matrix_backup, win.size)
-            # If no valid transformation, keep the mask centered
-            
-        transformation_matrix_backup = transformation_matrix
+        elif transformation_matrix is None:
+            gaze_point = (0, 0)
+
+            update_aperture_position(gaze_point)
+            check_targets(gaze_point, current_image)
 
         aperture.enabled = True
         # Draw the game image
@@ -323,14 +334,26 @@ for trial in range(1, 4):
 
     # Optional: Display a short break or instruction between trials
     if trial < 3:
-        break_text = visual.TextStim(
-            win,
-            text='Get ready for the next round!\n\nPress any key to continue.',
-            pos=(0, 0),
-            height=30,
-            color='black',
-            units='pix'
-        )
+        if LANGUAGE == "en":
+            break_text = visual.TextStim(
+                win,
+                text='Get ready for the next round!\n\nPress any key to continue.',
+                pos=(0, 0),
+                height=30,
+                color='black',
+                units='pix'
+            )
+
+        elif LANGUAGE == "de":
+            break_text = visual.TextStim(
+                win,
+                text='Machen Sie sich bereit für die nächste Runde!\n\nDrücken Sie eine beliebige Taste, um fortzufahren.',
+                pos=(0, 0),
+                height=30,
+                color='black',
+                units='pix'
+            )
+
         break_text.draw()
         win.flip()
         wait_for_keypress()
@@ -369,30 +392,50 @@ with open(results_file, 'a', newline='') as csvfile:
     writer.writerow(final_results)
 
 # Display the final results
-final_text = visual.TextStim(
-    win,
-    text=f'Congratulations, {participant_name}!\n\nYou found {total_targets_found} targets in {total_time:.2f} seconds.\n\nAverage time per target: {time_per_target:.2f} seconds.',
-    pos=(0, 0),
-    height=30,
-    color='black',
-    units='pix'
-)
+if LANGUAGE == "en":
+    final_text = visual.TextStim(
+        win,
+        text=f'Congratulations, {participant_name}!\n\nYou found {total_targets_found} targets in {total_time:.2f} seconds.\n\nAverage time per target: {time_per_target:.2f} seconds.',
+        pos=(0, 0),
+        height=30,
+        color='black',
+        units='pix'
+    )
+elif LANGUAGE == "de":
+    final_text = visual.TextStim(
+        win,
+        text=f'Herzlichen Glückwunsch, {participant_name}!\n\nSie haben {total_targets_found} Ziele in {total_time:.2f} Sekunden gefunden.\n\nDurchschnittliche Zeit pro Ziel: {time_per_target:.2f} Sekunden.',
+        pos=(0, 0),
+        height=30,
+        color='black',
+        units='pix'
+    )
 
 final_text.draw()
 win.flip()
 wait_for_keypress()
+
 
 # display leaderboard
 leaderboard = pd.read_csv('leaderboard.csv')
 leaderboard = leaderboard.sort_values(by='TimePerTarget', ascending=True)
 # reset index
 leaderboard.reset_index(drop=True, inplace=True)
-leaderboard_text = 'Leaderboard\n\n'
-for index, row in leaderboard.iterrows():
-    if index < 5:
-        leaderboard_text += f"{index + 1}. {row['Name']}: {row['TimePerTarget']} seconds\n"
 
-leaderboard_text += '\nPress any key to exit.'
+if LANGUAGE == "en":
+    leaderboard_text = 'Leaderboard\n\n'
+    for index, row in leaderboard.iterrows():
+        if index < 5:
+            leaderboard_text += f"{index + 1}. {row['Name']}: {row['TimePerTarget']} seconds\n"
+
+    leaderboard_text += '\nPress any key to exit.'
+elif LANGUAGE == "de":
+    leaderboard_text = 'Bestenliste\n\n'
+    for index, row in leaderboard.iterrows():
+        if index < 5:
+            leaderboard_text += f"{index + 1}. {row['Name']}: {row['TimePerTarget']} Sekunden\n"
+
+    leaderboard_text += '\nDrücken Sie eine beliebige Taste, um zu beenden.'
 
 leaderboard_text_stim = visual.TextStim(
     win,
