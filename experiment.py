@@ -13,7 +13,7 @@ tag_detector = Detector()
 
 ADDRESS = "192.168.137.138"
 PORT = "8080"
-LANGUAGE = "de"
+LANGUAGE = "en"
 
 def load_image_game(stimuli_path):
     image = [None] * 12
@@ -283,7 +283,7 @@ for trial in range(1, 4):
     current_image = random.choice(images)
     game_image = visual.ImageStim(win, image=current_image.get_image(), units='pix', pos=(0, 0), size=(1200, 1200))
 
-    current_image.reset()
+    current_image.reset() 
     trial_start_time = time.time()
     
     while not event.getKeys(['escape']):
@@ -437,15 +437,15 @@ leaderboard.reset_index(drop=True, inplace=True)
 if LANGUAGE == "en":
     leaderboard_text = 'Leaderboard\n\n'
     for index, row in leaderboard.iterrows():
-        if index < 3:
-            leaderboard_text += f"{index + 1}. {row['Name']}: {row['TimePerTarget']} seconds\n"
+        if index < 5:
+            leaderboard_text += f"{index + 1}. {row['Name']}: {row['TimePerTarget']:.2f} seconds\n"
 
     leaderboard_text += '\nPress any key to exit.'
 elif LANGUAGE == "de":
     leaderboard_text = 'Bestenliste\n\n'
     for index, row in leaderboard.iterrows():
-        if index < 3:
-            leaderboard_text += f"{index + 1}. {row['Name']}: {row[ 'TimePerTarget']} Sekunden\n"
+        if index < 5:
+            leaderboard_text += f"{index + 1}. {row['Name']}: {row[ 'TimePerTarget']:.2f} Sekunden\n"
 
     leaderboard_text += '\nDrücken Sie eine beliebige Taste, um zu beenden.'
 
